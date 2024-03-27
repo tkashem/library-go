@@ -3,6 +3,7 @@ package certrotation
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
@@ -70,6 +71,8 @@ type CertRotationController struct {
 
 	// Plumbing:
 	StatusReporter StatusReporter
+
+	lock sync.Mutex
 }
 
 func NewCertRotationController(
@@ -102,6 +105,12 @@ func NewCertRotationController(
 }
 
 func (c CertRotationController) Sync(ctx context.Context, syncCtx factory.SyncContext) error {
+	// TODO: it's a quick fix to serialize multiple controllers competing for the same
+	//  same secret object concurrently, in the near future, we should move to a dedicated
+	//  controller for each load balancer
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	syncErr := c.SyncWorker(ctx)
 
 	// running this function with RunOnceContextKey value context will make this "run-once" without updating status.
